@@ -1,8 +1,8 @@
 Package: qs
 Type: Package
-Title: Quick Serialization of R Objects
+Title: Quick Serialization of R Objects (for R version 3.4 and earlier)
 Version: 0.13.1
-Date: 2019-2-12
+Date: 2019-2-17
 Authors@R: c(
     person("Travers", "Ching", email = "traversc@gmail.com", role = c("aut", "cre", "cph")),
     person("Yann", "Collet", role = c("ctb", "cph"), comment = "Yann Collet is the author of the bundled zstd code"),
@@ -17,8 +17,6 @@ License: AGPL-3 | file LICENSE
 Imports: 
     Rcpp, RApiSerialize
 LinkingTo: Rcpp, RApiSerialize
-Depends: 
-    R (>= 3.5.0)
 RoxygenNote: 6.0.1
 Suggests: knitr, rmarkdown
 VignetteBuilder: knitr

@@ -89,11 +89,6 @@ void qsave(RObject x, std::string file, int compress_level=-1) {
 }
 
 // [[Rcpp::export]]
-void qs_use_alt_rep(bool s) {
-  use_alt_rep_bool = s;
-}
-
-// [[Rcpp::export]]
 std::vector<std::string> randomStrings(int N, int string_size = 50) {
   std::string charset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
   std::vector<std::string> ret(N);
@@ -128,38 +123,3 @@ RawVector zstd_decompress_raw(RawVector x) {
   return ret;
 }
 
-
-
-// [[Rcpp::export]]
-SEXP convertToAlt(CharacterVector x) {
-  auto ret = new stdvec_data(x.size());
-  for(int i=0; i < x.size(); i++) {
-    SEXP xi = x[i];
-    if(xi == NA_STRING) {
-      ret->encodings[i] = '\5';
-    } else {
-      switch(Rf_getCharCE(xi)) {
-      case CE_NATIVE:
-        ret->encodings[i] = 1;
-        ret->strings[i] = Rcpp::as<std::string>(xi);
-        break;
-      case CE_UTF8:
-        ret->encodings[i] = 2;
-        ret->strings[i] = Rcpp::as<std::string>(xi);
-        break;
-      case CE_LATIN1:
-        ret->encodings[i] = 3;
-        ret->strings[i] = Rcpp::as<std::string>(xi);
-        break;
-      case CE_BYTES:
-        ret->encodings[i] = 4;
-        ret->strings[i] = Rcpp::as<std::string>(xi);
-        break;
-      default:
-        ret->encodings[i] = 5;
-      break;
-      }
-    }
-  }
-  return stdvec_string::Make(ret, true);
-}

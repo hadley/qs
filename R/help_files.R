@@ -96,21 +96,6 @@ NULL
 NULL
 
 
-#' Use alt-rep
-#' 
-#' Changes whether qread uses the alt-rep system.  If you experience issues or run out of memory, set to FALSE.
-#' @usage qs_use_alt_rep(s)
-#' @param s A boolean to determine whether `qread` uses alt-rep.  Default: TRUE.  
-#' @examples
-#' myfile <- tempfile()
-#' qs_use_alt_rep(FALSE)
-#' x <- randomStrings(1e3)
-#' qsave(x, myfile)
-#' x2 <- qread(myfile) # qs will no longer use alt-rep strings to load in character vector data
-#' identical(x, x2) # returns true
-#' @name qs_use_alt_rep
-NULL
-
 
 #' Zstd CompressBound
 #' 
@@ -178,17 +163,4 @@ NULL
 #' randomStrings(N=100, string_size=200) # returns 100 alphanumeric strings of length 200
 #' @name randomStrings
 NULL
-
-#' Convert character vector to alt-rep
-#' 
-#' A function for generating a alt-rep object from a character vector, for users to experiment with the alt-rep system. 
-#' @usage convertToAlt(x)
-#' @param x The character vector
-#' @return The character vector in alt-rep form
-#' @examples
-#' xalt <- convertToAlt(randomStrings(N=10, string_size=20))
-#' xalt2 <- convertToAlt(c("a", "b", "c"))
-#' @name convertToAlt
-NULL
-
 

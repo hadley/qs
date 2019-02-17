@@ -21,10 +21,6 @@ qsave <- function(x, file, compress_level = -1L) {
     invisible(.Call(`_qs_qsave`, x, file, compress_level))
 }
 
-qs_use_alt_rep <- function(s) {
-    invisible(.Call(`_qs_qs_use_alt_rep`, s))
-}
-
 randomStrings <- function(N, string_size = 50L) {
     .Call(`_qs_randomStrings`, N, string_size)
 }
@@ -35,9 +31,5 @@ zstd_compress_raw <- function(x, compress_level) {
 
 zstd_decompress_raw <- function(x) {
     .Call(`_qs_zstd_decompress_raw`, x)
-}
-
-convertToAlt <- function(x) {
-    .Call(`_qs_convertToAlt`, x)
 }
 

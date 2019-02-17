@@ -39,182 +39,11 @@ https://github.com/traversc/qs
 #include "RApiSerializeAPI.h"
 #include "zstd.h"
 
-#include <R_ext/Rdynload.h>
+using namespace Rcpp;
 
 ////////////////////////////////////////////////////////////////
 // alt rep string class
 ////////////////////////////////////////////////////////////////
-
-// load alt-rep header -- see altrepisode package by Romain Francois
-#if R_VERSION < R_Version(3, 6, 0)
-#define class klass
-extern "C" {
-#include <R_ext/Altrep.h>
-}
-#undef class
-#else
-#include <R_ext/Altrep.h>
-#endif
-
-using namespace Rcpp;
-
-struct stdvec_data {
-  std::vector<std::string> strings;
-  std::vector<unsigned char> encodings;
-  R_xlen_t vec_size; 
-  stdvec_data(uint64_t N) {
-    strings = std::vector<std::string>(N);
-    encodings = std::vector<unsigned char>(N);
-    vec_size = N;
-  }
-};
-
-// instead of defining a set of free functions, we structure them
-// together in a struct
-struct stdvec_string {
-  static R_altrep_class_t class_t;
-  static SEXP Make(stdvec_data* data, bool owner){
-    SEXP xp = PROTECT(R_MakeExternalPtr(data, R_NilValue, R_NilValue));
-    if (owner) {
-      R_RegisterCFinalizerEx(xp, stdvec_string::Finalize, TRUE);
-    }
-    SEXP res = R_new_altrep(class_t, xp, R_NilValue);
-    UNPROTECT(1);
-    return res;
-  }
-  
-  // finalizer for the external pointer
-  static void Finalize(SEXP xp){
-    delete static_cast<stdvec_data*>(R_ExternalPtrAddr(xp));
-  }
-  
-  // get the std::vector<string>* from the altrep object `x`
-  static stdvec_data* Ptr(SEXP vec) {
-    return static_cast<stdvec_data*>(R_ExternalPtrAddr(R_altrep_data1(vec)));
-  }
-  
-  // same, but as a reference, for convenience
-  static stdvec_data& Get(SEXP vec) {
-    return *static_cast<stdvec_data*>(R_ExternalPtrAddr(R_altrep_data1(vec)));
-  }
-  
-  // ALTREP methods -------------------
-  
-  // The length of the object
-  static R_xlen_t Length(SEXP vec){
-    return Get(vec).vec_size;
-  }
-  
-  // What gets printed when .Internal(inspect()) is used
-  static Rboolean Inspect(SEXP x, int pre, int deep, int pvec, void (*inspect_subtree)(SEXP, int, int, int)){
-    Rprintf("qs alt-rep stdvec_string (len=%d, ptr=%p)\n", Length(x), Ptr(x));
-    return TRUE;
-  }
-  
-  // ALTVEC methods ------------------
-  static SEXP Materialize(SEXP vec) {
-    SEXP data2 = R_altrep_data2(vec);
-    if (data2 != R_NilValue) {
-      return std::move(data2);
-    }
-    R_xlen_t n = Length(vec);
-    data2 = PROTECT(Rf_allocVector(STRSXP, n));
-    
-    auto data1 = Get(vec);
-    for (R_xlen_t i = 0; i < n; i++) {
-      switch(data1.encodings[i]) {
-      case 1:
-        SET_STRING_ELT(data2, i, Rf_mkCharLenCE(data1.strings[i].data(), data1.strings[i].size(), CE_NATIVE) );
-        break;
-      case 2:
-        SET_STRING_ELT(data2, i, Rf_mkCharLenCE(data1.strings[i].data(), data1.strings[i].size(), CE_UTF8) );
-        break;
-      case 3:
-        SET_STRING_ELT(data2, i, Rf_mkCharLenCE(data1.strings[i].data(), data1.strings[i].size(), CE_LATIN1) );
-        break;
-      case 4:
-        SET_STRING_ELT(data2, i, Rf_mkCharLenCE(data1.strings[i].data(), data1.strings[i].size(), CE_BYTES) );
-        break;
-      default:
-        SET_STRING_ELT(data2, i, NA_STRING);
-      break;
-      }
-    }
-    
-    // free up some memory -- shrink to fit is a non-binding request
-    data1.encodings.resize(0);
-    data1.encodings.shrink_to_fit();
-    data1.strings.resize(0);
-    data1.strings.shrink_to_fit();
-    
-    R_set_altrep_data2(vec, data2);
-    UNPROTECT(1);
-    return std::move(data2);
-  }
-  
-  // The start of the data, i.e. the underlying double* array from the std::vector<double>
-  // This is guaranteed to never allocate (in the R sense)
-  static const void* Dataptr_or_null(SEXP vec) {
-    SEXP data2 = R_altrep_data2(vec);
-    if (data2 == R_NilValue) return nullptr;
-    return STDVEC_DATAPTR(data2);
-  }
-  
-  // same in this case, writeable is ignored
-  static void* Dataptr(SEXP vec, Rboolean writeable) {
-    return STDVEC_DATAPTR(Materialize(vec));
-  }
-  
-  
-  // ALTSTRING methods -----------------
-  // the element at the index `i`
-  // this does not do bounds checking because that's expensive, so
-  // the caller must take care of that
-  static SEXP string_Elt(SEXP vec, R_xlen_t i){
-    auto data2 = Materialize(vec);
-    return STRING_ELT(data2, i);
-    // switch(data1.encodings[i]) {
-    // case 1:
-    //   return Rf_mkCharLenCE(data1.strings[i].data(), data1.strings[i].size(), CE_NATIVE);
-    // case 2:
-    //   return Rf_mkCharLenCE(data1.strings[i].data(), data1.strings[i].size(), CE_UTF8);
-    // case 3:
-    //   return Rf_mkCharLenCE(data1.strings[i].data(), data1.strings[i].size(), CE_LATIN1);
-    // case 4:
-    //   return Rf_mkCharLenCE(data1.strings[i].data(), data1.strings[i].size(), CE_BYTES);
-    // default:
-    //   return NA_STRING;
-    // break;
-    // }
-  }
-  
-  // -------- initialize the altrep class with the methods above
-  
-  static void Init(DllInfo* dll){
-    class_t = R_make_altstring_class("stdvec_string", "altrepisode", dll);
-    
-    // altrep
-    R_set_altrep_Length_method(class_t, Length);
-    R_set_altrep_Inspect_method(class_t, Inspect);
-    
-    // altvec
-    R_set_altvec_Dataptr_method(class_t, Dataptr);
-    R_set_altvec_Dataptr_or_null_method(class_t, Dataptr_or_null);
-    
-    // altstring
-    R_set_altstring_Elt_method(class_t, string_Elt);
-  }
-  
-};
-
-// static initialization of stdvec_double::class_t
-R_altrep_class_t stdvec_string::class_t;
-
-// Called the package is loaded (needs Rcpp 0.12.18.3)
-// [[Rcpp::init]]
-void init_stdvec_double(DllInfo* dll){
-  stdvec_string::Init(dll);
-}
 
 ////////////////////////////////////////////////////////////////
 // common utility functions and constants
@@ -640,45 +469,7 @@ struct Data_Context {
       if(r_array_len > 0) getBlockData(reinterpret_cast<char*>(RAW(obj)), r_array_len);
       break;
     case STRSXP:
-      if(use_alt_rep_bool) {
-        auto ret = new stdvec_data(r_array_len);
-        for(uint64_t i=0; i < r_array_len; i++) {
-          uint32_t r_string_len;
-          cetype_t string_encoding = CE_NATIVE;
-          readStringHeader(r_string_len, string_encoding);
-          if(r_string_len == NA_STRING_LENGTH) {
-            ret->encodings[i] = 5;
-          } else if(r_string_len == 0) {
-            ret->encodings[i] = 1;
-            ret->strings[i] = "";
-          } else {
-            temp_string.resize(r_string_len);
-            getBlockData(&temp_string[0], r_string_len);
-            switch(string_encoding) {
-            case CE_NATIVE:
-              ret->encodings[i] = 1;
-              ret->strings[i] = temp_string;
-              break;
-            case CE_UTF8:
-              ret->encodings[i] = 2;
-              ret->strings[i] = temp_string;
-              break;
-            case CE_LATIN1:
-              ret->encodings[i] = 3;
-              ret->strings[i] = temp_string;
-              break;
-            case CE_BYTES:
-              ret->encodings[i] = 4;
-              ret->strings[i] = temp_string;
-              break;
-            default:
-              ret->encodings[i] = 5;
-            break;
-            }
-          }
-        }
-        obj = PROTECT(stdvec_string::Make(ret, true));
-      } else {
+      
         obj = PROTECT(Rf_allocVector(STRSXP, r_array_len));
         for(uint64_t i=0; i<r_array_len; i++) {
           uint32_t r_string_len;
@@ -696,7 +487,7 @@ struct Data_Context {
             SET_STRING_ELT(obj, i, Rf_mkCharLenCE(temp_string.data(), r_string_len, string_encoding));
           }
         }
-      }
+      
       break;
     case CPLXSXP:
       obj = PROTECT(Rf_allocVector(CPLXSXP, r_array_len));
